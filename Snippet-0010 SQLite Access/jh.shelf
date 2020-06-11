@@ -1,0 +1,196 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<shelfDocument>
+  <!-- This file contains definitions of shelves, toolbars, and tools.
+ It should not be hand-edited when it is being used by the application.
+ Note, that two definitions of the same element are not allowed in
+ a single file. -->
+
+  <tool name="SaveStateToDB" label="Save State To DB" icon="PLASMA_App">
+    <script scriptType="python"><![CDATA[import sqlite3 # sqlite3ã¢ã¸ã¥ã¼ã«ã®ã¤ã³ãã¼ã
+import hou # Houdiniã®ã¢ã¸ã¥ã¼ã«ã®ã¤ã³ãã¼ã
+import datetime
+from PySide2 import QtCore
+from PySide2 import QtWidgets
+
+node = hou.node("/")
+# database.dbã¨ããååã®SQLiteã®ãã¼ã¿ãã¼ã¹ãã¡ã¤ã«ã
+# HIPãã¡ã¤ã«ã¨åãéå±¤ã«æ¥ãããã«ãã¡ã¤ã«ãã¹ãä½ã
+dbname = hou.houdiniPath()[0] + "/database.db" 
+
+### ãã¤ã¢ã­ã°ã®ã¯ã©ã¹ãä½ã
+class SaveState(QtWidgets.QWidget):
+    def __init__(self, parent=None):
+        QtWidgets.QWidget.__init__(self, parent)
+
+        vbox = QtWidgets.QVBoxLayout() # ç¸¦ã«ä¸¦ã¹ãã¬ã¤ã¢ã¦ãæ¹å¼ãä½¿ã
+
+        self.setGeometry(500, 300, 300, 100) # ã¦ã£ã³ãã¦ã®ãµã¤ãºã®æå®
+        self.setWindowTitle('Save State') # ã¦ã£ã³ãã¦ã®ã¿ã¤ãã«ã®æå®
+        
+        self.label = QtWidgets.QLabel('Comment', self) 
+        vbox.addWidget(self.label, 1)
+
+        textedit = QtWidgets.QTextEdit() # ãã­ã¹ããã£ã¼ã«ããä½ã
+        vbox.addWidget(textedit) # ã¬ã¤ã¢ã¦ãã«ãã­ã¹ããã£ã¼ã«ããè¿½å ãã
+        self.msgtextedit = textedit # ãã¤ã¢ã­ã°ã¯ã©ã¹ã®msgtexteditå¤æ°ã«ãã­ã¹ããã£ã¼ã«ããæ ¼ç´ãã
+
+        button = QtWidgets.QPushButton('Save State', self) # ä¿å­ãã¿ã³ãä½æãã
+        button.setFocusPolicy(QtCore.Qt.NoFocus)
+        vbox.addWidget(button) # ãã¿ã³ãã¬ã¤ã¢ã¦ãã«è¿½å ãã
+        
+        self.connect(button, QtCore.SIGNAL('clicked()'), self.save) # ãã¿ã³ã¯ãªãã¯æã®ã¤ãã³ãã®å¦çãæå®ãã
+        
+        self.setLayout(vbox) 
+    
+    
+    def save(self):
+        # sqlite3ãä½¿ã£ã¦ãã¼ã¿ãã¼ã¹ãä½ããhistoryã¨ãããã¼ãã«ã
+        # ã¾ã ãã¼ã¿ãã¼ã¹ã«ãªãå ´åã«éãæ°è¦ã§ä½æãã
+        conn = sqlite3.connect(dbname)
+        c = conn.cursor()
+        sql_create_table = ''' CREATE TABLE IF NOT EXISTS history (
+                        id integer PRIMARY KEY,
+                        name text,
+                        state_data text,
+                        created text
+                    ); '''
+        c.execute(sql_create_table)
+        
+        ### ååãä½ã
+        name = self.msgtextedit.toPlainText()
+        
+        ### ãã¼ããããã¯ã¼ã¯åæ§æç¨ã®Pythonã³ã¼ããåå¾ãã
+        node = hou.node("/") # ä¸çªä¸ã®éå±¤ã®ãã¼ããããã¯ã¼ã¯ã®ãã¹
+        code = node.asCode(False, True, False, True, True, True) # ãã¼ããããã¯ã¼ã¯ãåæ§æããããã®Pythonã³ã¼ããåå¾ãã
+        
+        ### ç¾å¨ã®æ¥æãåå¾ãã
+        created = datetime.datetime.now().strftime("%Y/%m/%d %H:%M:%S") 
+        
+        sql_insert = ''' INSERT INTO history (name, state_data, created) 
+                VALUES (
+                    ?,
+                    ?,
+                    ?
+                ); ''' #ãã¼ã¿æ¿å¥ã®ã¯ã¨ãªæãä½ã
+        c.execute(sql_insert, [name, code, created]) # ãã¼ã¿ãã¼ã¹ã«ã¯ã¨ãªãéã
+        conn.commit() # ãã¼ã¿ãã¼ã¹ã®å¤æ´åãä¿å­ãã
+        
+        conn.close() # ãã¼ã¿ãã¼ã¹ã®æ¥ç¶ãåã
+        self.close()
+
+        
+dialog = SaveState()
+dialog.show()]]></script>
+  </tool>
+
+  <tool name="LoadSaveState" label="Load Save State" icon="PLASMA_App">
+    <script scriptType="python"><![CDATA[import sqlite3
+import hou
+from PySide2 import QtCore
+from PySide2 import QtWidgets
+from functools import partial
+
+node = hou.node("/")
+dbname = hou.houdiniPath()[0] + "/database.db"
+
+conn = sqlite3.connect(dbname)
+c = conn.cursor()
+sql_create_table = ''' CREATE TABLE IF NOT EXISTS history (
+                id integer PRIMARY KEY,
+                name text,
+                state_data text,
+                created text
+            ); '''
+c.execute(sql_create_table)
+
+conn.commit()
+
+sql_get_rows = ''' SELECT id, name, state_data, created FROM history ORDER BY created '''
+
+c.execute(sql_get_rows)
+rows = c.fetchall()
+
+conn.close()
+
+
+# èª­ã¿åãã®ãã¤ã¢ã­ã°ã®ã¯ã©ã¹
+class LoadState(QtWidgets.QWidget):
+    def __init__(self, datas, parent=None):
+        QtWidgets.QWidget.__init__(self, parent)
+
+        vbox = QtWidgets.QVBoxLayout()
+        
+        self.setGeometry(500, 300, 600, 300)
+        self.setWindowTitle('Load State')
+        
+        tableWidget = QtWidgets.QTableWidget()
+        tableWidget.setRowCount(len(datas)) # ãã¼ã¿ãã¼ã¹ã«ãããã¼ã¿ã®æ°ã ãè¡ãä½ã
+        tableWidget.setColumnCount(5) # åãäºã¤ä½ã
+        tableWidget.setHorizontalHeaderLabels(["id", "commnet", "created", "", ""])
+        
+        for i in range(len(datas)):
+            ### ãã¼ã¿ãã¼ã¹ã®æ ¼ç´ãããPythonã³ã¼ãä»¥å¤ããã¼ãã«ã®ã»ã«ã«æ¿å¥ãã
+            tableWidget.setItem(i, 0, QtWidgets.QTableWidgetItem(str(datas[i][0])))
+            tableWidget.setItem(i, 1, QtWidgets.QTableWidgetItem(str(datas[i][1])))
+            tableWidget.setItem(i, 2, QtWidgets.QTableWidgetItem(str(datas[i][3])))
+            
+            buttonLoad = QtWidgets.QPushButton("Load State") # èª­ã¿åãç¨ã®ãã¿ã³ãä½ã
+            buttonLoad.setFocusPolicy(QtCore.Qt.NoFocus)
+            buttonLoad.clicked.connect(partial(self.loadData, datas[i][2])) # ãã¿ã³ã¯ãªãã¯æã®é¢æ°ã«ãã¼ã¿ãã¼ã¹ã«æ ¼ç´ãããPythonã®ã³ã¼ãããã¹ãã
+            tableWidget.setCellWidget(i, 3, buttonLoad) # èª­ã¿åãç¨ã®ãã¿ã³ãï¼ã¤ãã®åã«æ¿å¥ãã
+            
+            buttonDelete = QtWidgets.QPushButton("Delete"); # ãã¼ã¿åé¤ç¨ã®ãã¿ã³ãä½ã
+            buttonDelete.setFocusPolicy(QtCore.Qt.NoFocus)
+            buttonDelete.clicked.connect(partial(self.deleteData, datas[i][0])) # åé¤ãã¿ã³ã¯ãªãã¯æã®é¢æ°ã«ãã¼ã¿ã®idããã¹ãã
+            tableWidget.setCellWidget(i, 4, buttonDelete) # äºã¤ãã®åã«åé¤ãã¿ã³ãæ¿å¥ãã
+        
+        
+        self.table = tableWidget # ãã¤ã¢ã­ã°ã®ã¯ã©ã¹ã®å¤æ°tableã«ãã¼ãã«ã®ã¦ã£ã¸ã§ãããæ ¼ç´ãã
+        
+        ### ãã¼ãã«ã®ãããã¼ã®ãµã¤ãºãèªåèª¿æ´ãã
+        header = tableWidget.horizontalHeader()
+        header.setSectionResizeMode(1, QtWidgets.QHeaderView.Stretch)
+        header.setSectionResizeMode(0, QtWidgets.QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(2, QtWidgets.QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(3, QtWidgets.QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(4, QtWidgets.QHeaderView.ResizeToContents)
+        
+        vbox.addWidget(tableWidget) # ãã¼ãã«ã®ã¦ã£ã¸ã§ãããã¬ã¤ã¢ã¦ãã«è¿½å ãã
+        
+        self.setLayout(vbox)
+    
+    ### ãã¼ã¿èª­ã¿åãã®ãã¿ã³ãæ¼ããéã«å¼ã°ããé¢æ°
+    def loadData(self, data):
+        exec(data) # ãã¼ã¿ãã¼ã¹ã«æ ¼ç´ããã¦ããPythonã³ã¼ããå®è¡ãã¦ããã¼ããããã¯ã¼ã¯ãåæ§æãã
+        self.close()
+    
+    ### ãã¼ã¿åé¤ãã¿ã³ãæ¼ããéã«å¼ã°ããé¢æ°
+    def deleteData(self, id):
+        ### idã«ããããããã¼ã¿ãæ¢ã
+        results = self.table.model().match(
+            self.table.model().index(0, 0),
+            QtCore.Qt.DisplayRole,
+            id,
+            -1,
+            QtCore.Qt.MatchContains
+        )
+        ### foundRowã«åé¤ããå¯¾è±¡ã®è¡çªå·ãæ ¼ç´ãã
+        foundRow = -1
+        for result in results:
+            foundRow = result.row()
+        
+        self.table.removeRow(foundRow) # æå®ã®è¡çªå·ã®ãã¼ãã«ã®è¡ãåé¤ãã
+        
+        conn = sqlite3.connect(dbname)
+        c = conn.cursor()
+        sql_remove_item = ''' DELETE FROM history WHERE id = ?; ''' # æå®ã®idã®ãã¼ã¿ããã¼ã¿ãã¼ã¹ããåé¤ããã¯ã¨ãªãä½ã
+                          
+        c.execute(sql_remove_item, [id]) # ãã¼ã¿ãã¼ã¹ãããã¼ã¿ãåé¤ãã
+        conn.commit() # ãã¼ã¿ãã¼ã¹ãæ´æ°ãã
+        conn.close()
+
+
+dialog = LoadState(rows)
+dialog.show()]]></script>
+  </tool>
+</shelfDocument>
