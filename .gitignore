@@ -9,3 +9,4 @@ B-*
 *.zip
 *.wav
 */frames/*
+.DS_Store
