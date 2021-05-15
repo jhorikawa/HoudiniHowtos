@@ -5,4 +5,4 @@ Houdini tutorial files repository used in Youtube videos.
 https://www.facebook.com/ParametricProceduralHoudini/
 
 ### Youtube Channel:
-https://www.youtube.com/playlist?list=PLzRzqTjuGIDgtI8wIsWVkU2-AVyDH91QM
+https://www.youtube.com/channel/UC5NStd0QmACnWs9DzqJ3vHg
