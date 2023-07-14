@@ -10,3 +10,4 @@ B-*
 *.wav
 */frames/*
 .DS_Store
+*/cache/*
